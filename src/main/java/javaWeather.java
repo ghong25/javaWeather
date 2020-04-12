@@ -3,7 +3,6 @@ import java.lang.*;
 import java.net.*;
 import java.util.*;
 import org.json.*;
-import java.time.*;
 import java.text.SimpleDateFormat;
 
 public class javaWeather {
@@ -13,9 +12,10 @@ public class javaWeather {
 
         // global variables
         String ip;
-        String zipCode;
         Double longitude = 0.00;
         Double latitude = 0.00;
+
+        String weatherAPIKey = "aee5400b392a39d03d8d839b4a34d4dc";
 
         // get IP address
         try {
@@ -39,18 +39,14 @@ public class javaWeather {
 
                 // read JSON response
                 JSONObject apiResponse = new JSONObject(ipResponse.toString());
-                System.out.println("IP address: " + apiResponse.getString("ip"));
 
-                zipCode = apiResponse.getString("postal");
-                System.out.println("Zip Code: " + zipCode);
                 System.out.println("Location: " + apiResponse.getString("city") + ", " + apiResponse.getString("region"));
 
-                System.out.println(ipResponse);
 
                 longitude = (Double) apiResponse.get("longitude");
                 latitude = (Double) apiResponse.get("latitude");
 
-                System.out.println("Coordinates: " + longitude + ", " + latitude);
+                //System.out.println("Coordinates: " + longitude + ", " + latitude);
 
                 input.close();
 
@@ -60,18 +56,13 @@ public class javaWeather {
 
         }
 
-        // if you can't get the user IP, prompt for user zip code
         catch (Exception e) {
-            Scanner input = new Scanner(System.in);
-            System.out.print("Please input your 5 digit zip code: ");
-            zipCode = input.next();
-            System.out.println(zipCode);
-
+            System.out.print(e);
         }
 
         try {
 
-            URL weatherAPI = new URL("https://api.darksky.net/forecast/aee5400b392a39d03d8d839b4a34d4dc" + "/" + latitude + "," + longitude);
+            URL weatherAPI = new URL("https://api.darksky.net/forecast/" + weatherAPIKey + "/" + latitude + "," + longitude);
             HttpURLConnection connection = (HttpURLConnection) weatherAPI.openConnection();
             BufferedReader inputBuffer = new BufferedReader(new InputStreamReader(connection.getInputStream()));
 
@@ -85,19 +76,37 @@ public class javaWeather {
             // read JSON response
             JSONObject darkSkyResponse = new JSONObject(responseBuffer.toString());
 
-            //printJsonObject(darkSkyResponse);
-
-            printCurrentWeather(darkSkyResponse);
-
-            printHourlyWeather(darkSkyResponse);
-
             inputBuffer.close();
+
+
+            while (true) {
+
+                Scanner input = new Scanner(System.in);
+                System.out.println("Enter 'C' for the current weather, 'H' for an hourly report, 'W' for a weekly report, and 'E' to exit the program: ");
+                String userInput = input.next();
+
+                String[] options = {"c", "h", "w"};
+
+                if (Arrays.asList(options).contains(userInput.toLowerCase())) {
+                    if (userInput.toLowerCase().equals("c")) {
+                        printCurrentWeather(darkSkyResponse);
+                    } else if (userInput.toLowerCase().equals("h")) {
+                        printHourlyWeather(darkSkyResponse);
+                    } else if (userInput.toLowerCase().equals("w")) {
+                        printWeeklyWeather(darkSkyResponse);
+                    }
+                }
+                if (userInput.toLowerCase().equals("e")) {
+                    break;
+                }
+            }
 
         } catch (MalformedURLException e) {
             e.printStackTrace();
         }
 
     }
+
 
     public static void printCurrentWeather(JSONObject weatherReport) {
         ArrayList<String> currentWeather = new ArrayList<>();
@@ -109,11 +118,14 @@ public class javaWeather {
         Long milliTime = Long.parseLong(current.get("time").toString()) * 1000;
         Date epochTime = new Date(milliTime);
 
-        currentWeather.add(epochTime.toString());
+        SimpleDateFormat sdf = new SimpleDateFormat("MMMM d, yyyy h:mm a", Locale.ENGLISH);
+        String formattedDate = sdf.format(epochTime);
+
+        currentWeather.add(formattedDate);
         currentWeather.add("summary: " + current.get("summary").toString());
         currentWeather.add("wind speed: " + current.get("windGust").toString());
         currentWeather.add("temperature: " + current.get("temperature").toString());
-        currentWeather.add("apparent temperature: " + current.get("apparentTemperature").toString());
+        currentWeather.add("feels like: " + current.get("apparentTemperature").toString());
 
         System.out.println(currentWeather);
 
@@ -132,11 +144,9 @@ public class javaWeather {
             Date epochTime = new Date(milliTime);
 
             SimpleDateFormat sdf = new SimpleDateFormat("MMMM d, yyyy h:mm a", Locale.ENGLISH);
-            sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
             String formattedDate = sdf.format(epochTime);
 
             hourWeather[n] = new String[] {
-
                     formattedDate,
                     hour.get("summary").toString(),
                     "Rain %: " + hour.get("precipProbability").toString(),
@@ -149,15 +159,31 @@ public class javaWeather {
 
     }
 
-    public static void printJsonObject(JSONObject jsonObj) {
-        jsonObj.keySet().forEach(keyStr ->
-        {
-            Object keyvalue = jsonObj.get(keyStr);
-            System.out.println("key: "+ keyStr + "        value: " + keyvalue);
+    public static void printWeeklyWeather(JSONObject weatherReport) {
 
-            //for nested objects iteration if required
-            //if (keyvalue instanceof JSONObject)
-            //    printJsonObject((JSONObject)keyvalue);
-        });
+        JSONObject dailyWeather = weatherReport.getJSONObject("daily");
+        JSONArray weekWeather = dailyWeather.getJSONArray("data");
+
+
+        // get weather reports for the next 12 hours
+        for (int n = 0; n < 7; n++) {
+            JSONObject day = (JSONObject) weekWeather.get(n);
+
+            Date epochTime = new Date(Long.parseLong(day.get("time").toString()) * 1000);
+
+            SimpleDateFormat sdf = new SimpleDateFormat("MMMM d, yyyy", Locale.ENGLISH);
+            String formattedDate = sdf.format(epochTime);
+
+            String[] dayWeather = new String[] {
+                    formattedDate,
+                    day.get("summary").toString(),
+                    "Rain %: " + day.get("precipProbability").toString(),
+                    "min temp: " + day.get("temperatureLow").toString(),
+                    "max temp: " + day.get("temperatureMax").toString()
+            };
+
+            System.out.println(Arrays.toString(dayWeather));
+        }
     }
+
 }
